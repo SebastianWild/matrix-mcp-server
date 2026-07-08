@@ -9,7 +9,7 @@
     "build": "tsc",
     "dev": "NODE_OPTIONS=--no-warnings tsx watch src/http-server.ts",
     "lint": "eslint .",
-    "test": "jest"
+    "test": "node --import tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.16.0",
