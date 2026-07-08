@@ -6,6 +6,8 @@ export const ENABLE_OAUTH = process.env.ENABLE_OAUTH === "true";
 export const ENABLE_TOKEN_EXCHANGE = process.env.ENABLE_TOKEN_EXCHANGE === "true";
 export const defaultHomeserverUrl =
   process.env.MATRIX_HOMESERVER_URL || "https://localhost:8008/";
+export const defaultMatrixUserId = process.env.MATRIX_USER_ID || "";
+export const defaultMatrixAccessToken = process.env.MATRIX_ACCESS_TOKEN || "";
 
 // OAuth/Token exchange configuration
 export const tokenExchangeConfig: TokenExchangeConfig = {
@@ -47,7 +49,7 @@ export function getAccessToken(
     return oauthToken;
   }
 
-  return "";
+  return process.env.MATRIX_ACCESS_TOKEN || defaultMatrixAccessToken;
 }
 
 /**
@@ -64,7 +66,13 @@ export function getMatrixContext(
     (Array.isArray(headers?.["matrix_homeserver_url"])
       ? headers?.["matrix_homeserver_url"][0]
       : headers?.["matrix_homeserver_url"]) || defaultHomeserverUrl;
-  return { matrixUserId, homeserverUrl };
+  return {
+    matrixUserId: matrixUserId || process.env.MATRIX_USER_ID || defaultMatrixUserId,
+    homeserverUrl:
+      homeserverUrl ||
+      process.env.MATRIX_HOMESERVER_URL ||
+      defaultHomeserverUrl,
+  };
 }
 
 /**
