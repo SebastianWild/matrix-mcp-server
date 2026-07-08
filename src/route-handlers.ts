@@ -1,9 +1,10 @@
 import { Request, Response } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import server from "./server.js";
+import { createMcpServer } from "./server.js";
 
 export const handlePost = async (req: Request, res: Response) => {
   try {
+    const server = createMcpServer();
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
     });
