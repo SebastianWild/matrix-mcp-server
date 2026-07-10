@@ -9,6 +9,41 @@ export type ProcessedMessage =
   | { type: "text"; text: string }
   | { type: "image"; data: string; mimeType: string };
 
+export type ProcessedMessageMetadata = {
+  eventId?: string;
+  sender?: string;
+  senderDisplayName?: string;
+  timestamp: string;
+  originServerTs: number;
+  msgtype?: string;
+  body?: string;
+};
+
+export type ProcessedMessageWithMetadata = {
+  content: ProcessedMessage;
+  metadata: ProcessedMessageMetadata;
+};
+
+function getSenderDisplayName(event: sdk.MatrixEvent): string | undefined {
+  const member = event.sender;
+  return member?.name || member?.rawDisplayName || undefined;
+}
+
+function buildMessageMetadata(event: sdk.MatrixEvent): ProcessedMessageMetadata {
+  const content = event.getContent();
+  const originServerTs = event.getTs();
+
+  return {
+    eventId: event.getId(),
+    sender: event.getSender() || undefined,
+    senderDisplayName: getSenderDisplayName(event),
+    timestamp: new Date(originServerTs).toISOString(),
+    originServerTs,
+    msgtype: content?.msgtype,
+    body: typeof content?.body === "string" ? content.body : undefined,
+  };
+}
+
 /**
  * Processes a Matrix event and extracts relevant content
  * 
@@ -20,6 +55,21 @@ export async function processMessage(
   event: sdk.MatrixEvent,
   matrixClient: MatrixClient | null
 ): Promise<ProcessedMessage | null> {
+  const processed = await processMessageWithMetadata(event, matrixClient);
+  return processed?.content || null;
+}
+
+/**
+ * Processes a Matrix event and preserves Matrix sender/timestamp metadata.
+ *
+ * @param event - Matrix event to process
+ * @param matrixClient - Matrix client instance for fetching additional data
+ * @returns Promise<ProcessedMessageWithMetadata | null> - Processed message with metadata or null if not processable
+ */
+export async function processMessageWithMetadata(
+  event: sdk.MatrixEvent,
+  matrixClient: MatrixClient | null
+): Promise<ProcessedMessageWithMetadata | null> {
   if (!matrixClient) {
     throw new Error("Matrix client is not initialized.");
   }
@@ -29,8 +79,11 @@ export async function processMessage(
   if (event.getType() === EventType.RoomMessage && content) {
     if (content.msgtype === "m.text") {
       return {
-        type: "text",
-        text: String(content.body || ""),
+        content: {
+          type: "text",
+          text: String(content.body || ""),
+        },
+        metadata: buildMessageMetadata(event),
       };
     } else if (content.msgtype === "m.image" && content.url) {
       try {
@@ -45,11 +98,14 @@ export async function processMessage(
         const base64Data = Buffer.from(buffer).toString("base64");
         
         return {
-          type: "image",
-          data: base64Data,
-          mimeType: String(
-            content.info?.mimetype || "application/octet-stream"
-          ),
+          content: {
+            type: "image",
+            data: base64Data,
+            mimeType: String(
+              content.info?.mimetype || "application/octet-stream"
+            ),
+          },
+          metadata: buildMessageMetadata(event),
         };
       } catch (error: any) {
         console.error(`Failed to fetch image content: ${error.message}`);
@@ -75,7 +131,7 @@ export async function processMessagesByDate(
   startDate: string,
   endDate: string,
   matrixClient: MatrixClient
-): Promise<ProcessedMessage[]> {
+): Promise<ProcessedMessageWithMetadata[]> {
   const start = new Date(startDate).getTime();
   const end = new Date(endDate).getTime();
 
@@ -85,10 +141,10 @@ export async function processMessagesByDate(
   });
 
   const messages = await Promise.all(
-    filteredEvents.map((event) => processMessage(event, matrixClient))
+    filteredEvents.map((event) => processMessageWithMetadata(event, matrixClient))
   );
 
-  return messages.filter((message) => message !== null) as ProcessedMessage[];
+  return messages.filter((message) => message !== null) as ProcessedMessageWithMetadata[];
 }
 
 /**

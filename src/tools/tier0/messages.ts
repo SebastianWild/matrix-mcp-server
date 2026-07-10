@@ -2,8 +2,45 @@ import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { createConfiguredMatrixClient, getAccessToken, getMatrixContext } from "../../utils/server-helpers.js";
 import { removeClientFromCache } from "../../matrix/client.js";
-import { processMessage, processMessagesByDate, countMessagesByUser } from "../../matrix/messageProcessor.js";
+import {
+  countMessagesByUser,
+  processMessagesByDate,
+  processMessageWithMetadata,
+  ProcessedMessageWithMetadata,
+} from "../../matrix/messageProcessor.js";
 import { ToolRegistrationFunction } from "../../types/tool-types.js";
+
+export function messageToStructuredMessage(message: ProcessedMessageWithMetadata) {
+  return {
+    ...message.metadata,
+    type: message.content.type,
+    text: message.content.type === "text" ? message.content.text : undefined,
+    mimeType: message.content.type === "image" ? message.content.mimeType : undefined,
+  };
+}
+
+export function messageToText(message: ProcessedMessageWithMetadata): string {
+  const sender = message.metadata.senderDisplayName || message.metadata.sender || "unknown sender";
+  const body =
+    message.content.type === "text"
+      ? message.content.text
+      : `[image: ${message.content.mimeType}]`;
+  return `${message.metadata.timestamp} ${sender}: ${body}`;
+}
+
+export function messagesResult(messages: ProcessedMessageWithMetadata[], roomId: string, roomName?: string) {
+  return {
+    content: messages.map((message) => ({
+      type: "text",
+      text: messageToText(message),
+    })),
+    structuredContent: {
+      roomId,
+      roomName,
+      messages: messages.map(messageToStructuredMessage),
+    },
+  };
+}
 
 // Tool: Get room messages
 export const getRoomMessagesHandler = async (
@@ -34,21 +71,27 @@ export const getRoomMessagesHandler = async (
         .getLiveTimeline()
         .getEvents()
         .slice(-limit)
-        .map((event) => processMessage(event, client))
+        .map((event) => processMessageWithMetadata(event, client))
     );
 
     const validMessages = messages.filter((message) => message !== null);
 
+    if (validMessages.length > 0) {
+      return messagesResult(validMessages, roomId, room.name || undefined);
+    }
+
     return {
-      content:
-        validMessages.length > 0
-          ? validMessages
-          : [
-              {
-                type: "text",
-                text: `No messages found in room ${room.name || roomId}`,
-              },
-            ],
+      content: [
+        {
+          type: "text",
+          text: `No messages found in room ${room.name || roomId}`,
+        },
+      ],
+      structuredContent: {
+        roomId,
+        roomName: room.name || undefined,
+        messages: [],
+      },
     };
   } catch (error: any) {
     console.error(`Failed to get room messages: ${error.message}`);
@@ -91,18 +134,24 @@ export const getMessagesByDateHandler = async (
     const events = room.getLiveTimeline().getEvents();
     const messages = await processMessagesByDate(events, startDate, endDate, client);
 
+    if (messages.length > 0) {
+      return messagesResult(messages, roomId, room.name || undefined);
+    }
+
     return {
-      content:
-        messages.length > 0
-          ? messages
-          : [
-              {
-                type: "text",
-                text: `No messages found in room ${
-                  room.name || roomId
-                } between ${startDate} and ${endDate}`,
-              },
-            ],
+      content: [
+        {
+          type: "text",
+          text: `No messages found in room ${
+            room.name || roomId
+          } between ${startDate} and ${endDate}`,
+        },
+      ],
+      structuredContent: {
+        roomId,
+        roomName: room.name || undefined,
+        messages: [],
+      },
     };
   } catch (error: any) {
     console.error(`Failed to filter messages by date: ${error.message}`);

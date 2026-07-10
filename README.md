@@ -76,14 +76,14 @@ ENABLE_OAUTH=true npm run dev
 
   - `roomId` (string): Matrix room ID
   - `limit` (number, default: 20): Maximum messages to retrieve
-  - Returns formatted message content including text and images
+  - Returns readable message text plus structured metadata including event ID, sender, sender display name, ISO timestamp, origin server timestamp, message type, and body
 
 - **`get-messages-by-date`** - Filter messages by date range
 
   - `roomId` (string): Matrix room ID
   - `startDate` (string): ISO 8601 format (e.g., `2024-01-01T00:00:00Z`)
   - `endDate` (string): ISO 8601 format
-  - Returns messages within the specified timeframe
+  - Returns messages within the specified timeframe with the same structured sender/timestamp metadata as `get-room-messages`
 
 - **`identify-active-users`** - Find most active users by message count
   - `roomId` (string): Matrix room ID
