@@ -1,9 +1,23 @@
 import * as sdk from "matrix-js-sdk";
 import { MatrixClient, ClientEvent } from "matrix-js-sdk";
+import http from "http";
 import https from "https";
 import fetch from "node-fetch";
 import { exchangeToken, TokenExchangeConfig } from "../auth/tokenExchange.js";
 import { getCachedClient, cacheClient, removeCachedClient } from "./clientCache.js";
+
+// Shared SDK transport; exported for real protocol regression tests.
+export const matrixFetch: typeof globalThis.fetch = async (input: any, init?: any) => {
+  const httpAgent = new http.Agent();
+  // Preserve the existing HTTPS certificate policy; this transport repair must
+  // not silently change compatibility with previously supported homeservers.
+  const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+  return fetch(input, {
+    ...(init || {}),
+    // node-fetch calls this for every URL, including cross-protocol redirects.
+    agent: (url) => url.protocol === "http:" ? httpAgent : httpsAgent,
+  }) as any;
+};
 
 /**
  * Configuration for Matrix client creation
@@ -69,10 +83,7 @@ export async function createMatrixClient(
   const client = sdk.createClient({
     baseUrl: homeserverUrl,
     userId,
-    fetchFn: async (input: any, init?: any) => {
-      const agent = new https.Agent({ rejectUnauthorized: false });
-      return fetch(input, { ...(init || {}), agent }) as any;
-    },
+    fetchFn: matrixFetch,
   });
 
   try {
